@@ -173,13 +173,14 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str, player_name: 
 
 # --- Servir le frontend buildé en production ---
 
-FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+_backend_dir = Path(__file__).resolve().parent
+FRONTEND_DIST = _backend_dir / "static"  # copié par le build
+if not FRONTEND_DIST.is_dir():
+    FRONTEND_DIST = _backend_dir.parent / "frontend" / "dist"  # dev local
 
-print(f"[Hitster] Looking for frontend at: {FRONTEND_DIST}")
-print(f"[Hitster] Frontend dist exists: {FRONTEND_DIST.is_dir()}")
+print(f"[Hitster] Frontend dist: {FRONTEND_DIST} (exists={FRONTEND_DIST.is_dir()})")
 
 if FRONTEND_DIST.is_dir():
-    print(f"[Hitster] Frontend files: {list(FRONTEND_DIST.iterdir())}")
     # Fichiers statiques (JS, CSS, images)
     if (FRONTEND_DIST / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
@@ -187,10 +188,7 @@ if FRONTEND_DIST.is_dir():
     # Toutes les autres routes → index.html (SPA routing Vue.js)
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        # Servir un fichier s'il existe (favicon, etc.)
         file = FRONTEND_DIST / full_path
         if full_path and file.is_file():
             return FileResponse(file)
         return FileResponse(FRONTEND_DIST / "index.html")
-else:
-    print(f"[Hitster] WARNING: frontend/dist not found! Contents of parent: {list(FRONTEND_DIST.parent.parent.iterdir())}")
