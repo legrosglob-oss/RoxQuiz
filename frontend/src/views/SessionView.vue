@@ -23,7 +23,7 @@
         <div v-else-if="hasToken && spotifyError" class="spotify-error">
           {{ spotifyError }}
           <button class="spotify-disconnect-btn" @click="disconnectSpotify">Déconnecter</button>
-          <p class="hint">La partie utilisera les extraits 30s à la place.</p>
+          <p class="hint">Spotify Premium requis. Connecte un compte Premium.</p>
         </div>
         <div v-else-if="hasToken" class="spotify-connecting">
           Connexion Spotify en cours...
@@ -33,7 +33,7 @@
           <button class="spotify-login-btn" @click="openSpotifyLogin">
             Se connecter à Spotify
           </button>
-          <p class="hint">Optionnel — sans Premium, les extraits 30s seront utilisés.</p>
+          <p class="hint">Spotify Premium requis pour la musique.</p>
         </div>
       </div>
 
@@ -71,9 +71,10 @@
 
       <p v-if="error" class="error">{{ error }}</p>
 
-      <button v-if="isHost" class="primary start-btn" @click="startGame" :disabled="players.length < 1">
+      <button v-if="isHost" class="primary start-btn" @click="startGame" :disabled="players.length < 1 || !spotifyReady">
         Lancer la partie
       </button>
+      <p v-if="isHost && !spotifyReady && !hasToken" class="hint">Connecte-toi à Spotify Premium pour lancer</p>
       <p v-if="!isHost" class="waiting">En attente du lancement par l'hôte...</p>
 
       <p class="share">Partage ce code : <strong>{{ code }}</strong></p>
