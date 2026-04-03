@@ -186,14 +186,22 @@ class SpotifyClient:
         resp.raise_for_status()
         return resp.json()
 
-    def _parse_track(self, t: dict) -> Track | None:
+    def _parse_track(self, t: dict, exclude_compilations: bool = True) -> Track | None:
         if not t:
             return None
         album = t.get("album", {})
+        
+        # Filtrer les compilations si demandé
+        if exclude_compilations and album.get("album_type") == "compilation":
+            return None
+
         year = 0
         release = album.get("release_date", "")
         if release:
-            year = int(release[:4])
+            try:
+                year = int(release[:4])
+            except ValueError:
+                year = 0
         images = album.get("images", [])
         return Track(
             id=t["id"],
