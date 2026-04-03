@@ -98,10 +98,28 @@ async function initPlayer() {
   console.log('[Spotify] connect() =>', connected)
 }
 
+async function activateDevice() {
+  if (!deviceId.value || !getToken()) return false
+  try {
+    const resp = await fetch('https://api.spotify.com/v1/me/player', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ device_ids: [deviceId.value], play: false }),
+    })
+    return resp.ok || resp.status === 204
+  } catch (e) {
+    console.error('[Spotify] activate device error:', e)
+    return false
+  }
+}
+
 async function playTrack(spotifyUri) {
   if (!deviceId.value || !getToken()) return
   try {
-    const resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
+    let resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${getToken()}`,
@@ -109,6 +127,21 @@ async function playTrack(spotifyUri) {
       },
       body: JSON.stringify({ uris: [spotifyUri] }),
     })
+    // Device not found — activer le device puis réessayer
+    if (resp.status === 404) {
+      console.log('[Spotify] Device not found, activating...')
+      await activateDevice()
+      // Petit délai pour laisser Spotify enregistrer le device
+      await new Promise(r => setTimeout(r, 500))
+      resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uris: [spotifyUri] }),
+      })
+    }
     if (!resp.ok) {
       const text = await resp.text()
       console.error('[Spotify] play error:', resp.status, text)
