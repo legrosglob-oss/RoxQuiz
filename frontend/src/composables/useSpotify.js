@@ -26,6 +26,7 @@ const deviceId = ref('')
 const hasToken = ref(!!sessionStorage.getItem('spotify_access_token'))
 const error = ref('')
 let player = null
+let previewAudio = null
 
 function getToken() {
   return sessionStorage.getItem('spotify_access_token') || ''
@@ -135,10 +136,34 @@ async function refreshToken() {
   }
 }
 
+function playPreview(previewUrl) {
+  stopPreview()
+  if (!previewUrl) return
+  previewAudio = new Audio(previewUrl)
+  previewAudio.volume = 0.8
+  previewAudio.play().then(() => {
+    isPlaying.value = true
+  }).catch((e) => {
+    console.error('[Spotify] Preview play error:', e)
+  })
+  previewAudio.addEventListener('ended', () => {
+    isPlaying.value = false
+  })
+}
+
+function stopPreview() {
+  if (previewAudio) {
+    previewAudio.pause()
+    previewAudio.src = ''
+    previewAudio = null
+  }
+}
+
 function stop() {
   if (player) {
     player.pause()
   }
+  stopPreview()
   isPlaying.value = false
 }
 
@@ -157,5 +182,5 @@ function disconnect() {
 }
 
 export function useSpotify() {
-  return { isPlaying, isReady, deviceId, hasToken, error, initPlayer, playTrack, stop, refreshToken, disconnect }
+  return { isPlaying, isReady, deviceId, hasToken, error, initPlayer, playTrack, playPreview, stop, refreshToken, disconnect }
 }

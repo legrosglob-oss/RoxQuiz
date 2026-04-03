@@ -129,8 +129,12 @@ class Game:
         self._all_answered = asyncio.Event()
         self.current_round += 1
 
-        # La lecture est gérée côté frontend via le Web Playback SDK
-        has_audio = self.spotify_user_token is not None and track.spotify_uri is not None
+        # La lecture est gérée côté frontend :
+        # - Premium : Web Playback SDK (hôte uniquement, piste complète)
+        # - Fallback : preview_url 30s via <audio> (tous les clients)
+        has_premium_audio = self.spotify_user_token is not None and track.spotify_uri is not None
+        has_preview = track.preview_url is not None
+        has_audio = has_premium_audio or has_preview
 
         # Calculer la deadline avant le broadcast pour synchroniser les clients
         wait = (self.config.listen_duration + self.config.answer_duration) if has_audio else self.config.answer_duration
@@ -146,6 +150,7 @@ class Game:
                 "image_url": track.image_url,
             },
             "has_audio": has_audio,
+            "has_premium_audio": has_premium_audio,
             "listen_duration": self.config.listen_duration,
             "answer_duration": self.config.answer_duration,
             "round_deadline": self._round_deadline,

@@ -17,20 +17,24 @@
       <!-- Spotify connection pour l'hôte -->
       <div v-if="isHost" class="spotify-status">
         <div v-if="spotifyReady" class="spotify-connected">
-          Spotify connecté
+          Spotify Premium connecté
           <button class="spotify-disconnect-btn" @click="disconnectSpotify">Déconnecter</button>
         </div>
         <div v-else-if="hasToken && spotifyError" class="spotify-error">
           {{ spotifyError }}
           <button class="spotify-disconnect-btn" @click="disconnectSpotify">Déconnecter</button>
+          <p class="hint">La partie utilisera les extraits 30s à la place.</p>
         </div>
         <div v-else-if="hasToken" class="spotify-connecting">
           Connexion Spotify en cours...
           <button class="spotify-disconnect-btn" @click="disconnectSpotify">Réessayer</button>
         </div>
-        <button v-else class="spotify-login-btn" @click="openSpotifyLogin">
-          Se connecter à Spotify
-        </button>
+        <div v-else class="spotify-optional">
+          <button class="spotify-login-btn" @click="openSpotifyLogin">
+            Se connecter à Spotify
+          </button>
+          <p class="hint">Optionnel — sans Premium, les extraits 30s seront utilisés.</p>
+        </div>
       </div>
 
       <div v-if="isHost" class="config">
@@ -67,10 +71,9 @@
 
       <p v-if="error" class="error">{{ error }}</p>
 
-      <button v-if="isHost" class="primary start-btn" @click="startGame" :disabled="players.length < 1 || !spotifyReady">
+      <button v-if="isHost" class="primary start-btn" @click="startGame" :disabled="players.length < 1">
         Lancer la partie
       </button>
-      <p v-if="isHost && !spotifyReady" class="hint">Connecte-toi à Spotify Premium pour lancer</p>
       <p v-if="!isHost" class="waiting">En attente du lancement par l'hôte...</p>
 
       <p class="share">Partage ce code : <strong>{{ code }}</strong></p>
@@ -194,7 +197,7 @@ import { useSpotify } from '../composables/useSpotify.js'
 const props = defineProps({ code: String })
 const router = useRouter()
 const { connected, connect, send, on } = useWebSocket()
-const { isPlaying, isReady: spotifyPlayerReady, deviceId, hasToken, error: spotifyError, initPlayer, playTrack, stop, disconnect: spotifyDisconnect } = useSpotify()
+const { isPlaying, isReady: spotifyPlayerReady, deviceId, hasToken, error: spotifyError, initPlayer, playTrack, playPreview, stop, disconnect: spotifyDisconnect } = useSpotify()
 
 const playerName = sessionStorage.getItem('playerName') || 'Joueur'
 
@@ -367,12 +370,15 @@ onMounted(async () => {
     textAnswer.value = ''
     answered.value = false
 
-    // Seul l'hôte joue la musique via le Web Playback SDK
-    const canPlay = isHost.value && spotifyPlayerReady.value && data.track.spotify_uri
+    // Premium : seul l'hôte joue via le Web Playback SDK
+    // Fallback : tous les clients jouent le preview 30s via <audio>
+    const canPlayPremium = isHost.value && spotifyPlayerReady.value && data.track.spotify_uri && data.has_premium_audio
     currentHasAudio.value = data.has_audio
 
-    if (canPlay) {
+    if (canPlayPremium) {
       playTrack(data.track.spotify_uri)
+    } else if (data.track.preview_url) {
+      playPreview(data.track.preview_url)
     }
 
     startTimer(data.round_deadline)
@@ -384,6 +390,7 @@ onMounted(async () => {
     correctPlayers.value = data.correct_players
     scores.value = data.scores
     trackInfo.value = data.track
+    stop()
     clearInterval(timerInterval)
   })
 
@@ -450,9 +457,14 @@ onUnmounted(() => {
 .spotify-error {
   color: #e74c3c; font-weight: 600; padding: 0.5rem;
   background: #e74c3c22; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem;
   font-size: 0.9rem;
 }
+.spotify-error .hint, .spotify-optional .hint {
+  width: 100%; text-align: center; margin: 0;
+  color: #888; font-size: 0.8rem; font-weight: 400;
+}
+.spotify-optional { text-align: center; }
 
 .config { width: 100%; max-width: 400px; }
 .config label {
