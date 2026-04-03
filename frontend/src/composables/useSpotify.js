@@ -98,28 +98,37 @@ async function initPlayer() {
   console.log('[Spotify] connect() =>', connected)
 }
 
-async function activateDevice() {
-  if (!deviceId.value || !getToken()) return false
-  try {
-    const resp = await fetch('https://api.spotify.com/v1/me/player', {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${getToken()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ device_ids: [deviceId.value], play: false }),
-    })
-    return resp.ok || resp.status === 204
-  } catch (e) {
-    console.error('[Spotify] activate device error:', e)
-    return false
-  }
+async function reconnectPlayer() {
+  if (!player) return false
+  console.log('[Spotify] Reconnecting player...')
+  player.disconnect()
+  isReady.value = false
+  deviceId.value = ''
+  const ok = await player.connect()
+  if (!ok) return false
+  // Attendre l'événement 'ready' qui met à jour deviceId
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(false), 5000)
+    const check = () => {
+      if (deviceId.value) {
+        clearTimeout(timeout)
+        resolve(true)
+      }
+    }
+    // deviceId est mis à jour par le listener 'ready'
+    const interval = setInterval(() => {
+      check()
+      if (deviceId.value) clearInterval(interval)
+    }, 100)
+    setTimeout(() => clearInterval(interval), 5000)
+  })
 }
 
 async function playTrack(spotifyUri) {
-  if (!deviceId.value || !getToken()) return
-  try {
-    let resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
+  if (!getToken()) return
+
+  async function doPlay() {
+    return fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${getToken()}`,
@@ -127,20 +136,20 @@ async function playTrack(spotifyUri) {
       },
       body: JSON.stringify({ uris: [spotifyUri] }),
     })
-    // Device not found — activer le device puis réessayer
+  }
+
+  try {
+    if (!deviceId.value) {
+      await reconnectPlayer()
+    }
+    let resp = await doPlay()
+    // Device perdu — reconnecter le player pour un nouveau device_id
     if (resp.status === 404) {
-      console.log('[Spotify] Device not found, activating...')
-      await activateDevice()
-      // Petit délai pour laisser Spotify enregistrer le device
-      await new Promise(r => setTimeout(r, 500))
-      resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ uris: [spotifyUri] }),
-      })
+      console.log('[Spotify] Device not found, reconnecting player...')
+      const reconnected = await reconnectPlayer()
+      if (reconnected) {
+        resp = await doPlay()
+      }
     }
     if (!resp.ok) {
       const text = await resp.text()
