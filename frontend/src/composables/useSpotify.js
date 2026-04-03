@@ -98,37 +98,52 @@ async function initPlayer() {
   console.log('[Spotify] connect() =>', connected)
 }
 
-async function reconnectPlayer() {
-  if (!player) return false
-  console.log('[Spotify] Reconnecting player...')
-  player.disconnect()
-  isReady.value = false
-  deviceId.value = ''
-  const ok = await player.connect()
-  if (!ok) return false
-  // Attendre l'événement 'ready' qui met à jour deviceId
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 5000)
-    const check = () => {
-      if (deviceId.value) {
-        clearTimeout(timeout)
-        resolve(true)
-      }
-    }
-    // deviceId est mis à jour par le listener 'ready'
-    const interval = setInterval(() => {
-      check()
-      if (deviceId.value) clearInterval(interval)
-    }, 100)
-    setTimeout(() => clearInterval(interval), 5000)
+async function ensureDeviceActive() {
+  const token = getToken()
+  if (!token || !deviceId.value) return false
+
+  // Transférer la lecture vers notre device
+  console.log('[Spotify] Transferring playback to device:', deviceId.value)
+  const resp = await fetch('https://api.spotify.com/v1/me/player', {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ device_ids: [deviceId.value], play: false }),
   })
+  console.log('[Spotify] Transfer response:', resp.status)
+  // 204 = ok, 404 = pas de session active (normal au premier lancement)
+  return resp.ok || resp.status === 204 || resp.status === 404
 }
 
 async function playTrack(spotifyUri) {
   if (!getToken()) return
 
-  async function doPlay() {
-    return fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
+  // S'assurer que le player est connecté
+  if (!player || !isReady.value) {
+    await initPlayer()
+    // Attendre que le player soit prêt
+    await new Promise((resolve) => {
+      if (isReady.value) { resolve(); return }
+      const interval = setInterval(() => {
+        if (isReady.value) { clearInterval(interval); resolve() }
+      }, 100)
+      setTimeout(() => { clearInterval(interval); resolve() }, 5000)
+    })
+  }
+
+  if (!deviceId.value) {
+    console.error('[Spotify] No device available')
+    return
+  }
+
+  // Transférer la lecture vers notre device puis attendre que Spotify l'enregistre
+  await ensureDeviceActive()
+  await new Promise(r => setTimeout(r, 1000))
+
+  try {
+    const resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${getToken()}`,
@@ -136,21 +151,6 @@ async function playTrack(spotifyUri) {
       },
       body: JSON.stringify({ uris: [spotifyUri] }),
     })
-  }
-
-  try {
-    if (!deviceId.value) {
-      await reconnectPlayer()
-    }
-    let resp = await doPlay()
-    // Device perdu — reconnecter le player pour un nouveau device_id
-    if (resp.status === 404) {
-      console.log('[Spotify] Device not found, reconnecting player...')
-      const reconnected = await reconnectPlayer()
-      if (reconnected) {
-        resp = await doPlay()
-      }
-    }
     if (!resp.ok) {
       const text = await resp.text()
       console.error('[Spotify] play error:', resp.status, text)
