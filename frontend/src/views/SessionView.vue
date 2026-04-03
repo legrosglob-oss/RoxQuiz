@@ -371,17 +371,12 @@ onMounted(async () => {
     textAnswer.value = ''
     answered.value = false
 
-    // Premium : seul l'hôte joue via le Web Playback SDK
-    // Fallback : tous les clients jouent le preview 30s via <audio>
-    const hasPremium = data.has_premium_audio ?? data.has_audio
-    const canPlayPremium = isHost.value && spotifyPlayerReady.value && data.track.spotify_uri && hasPremium
+    // La lecture Premium est gérée côté serveur
+    // Le SDK Web Playback agit comme enceinte (reçoit l'audio automatiquement)
+    // Fallback preview 30s si disponible et pas de Premium
     currentHasAudio.value = data.has_audio
 
-    console.log('[RoxQuiz] Audio:', { canPlayPremium, hasPremium, preview: data.track.preview_url, isHost: isHost.value, sdkReady: spotifyPlayerReady.value })
-
-    if (canPlayPremium) {
-      playTrack(data.track.spotify_uri)
-    } else if (data.track.preview_url) {
+    if (!data.has_premium_audio && data.track.preview_url) {
       playPreview(data.track.preview_url)
     }
 
