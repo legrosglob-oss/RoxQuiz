@@ -175,9 +175,14 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str, player_name: 
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
+print(f"[Hitster] Looking for frontend at: {FRONTEND_DIST}")
+print(f"[Hitster] Frontend dist exists: {FRONTEND_DIST.is_dir()}")
+
 if FRONTEND_DIST.is_dir():
+    print(f"[Hitster] Frontend files: {list(FRONTEND_DIST.iterdir())}")
     # Fichiers statiques (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+    if (FRONTEND_DIST / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
     # Toutes les autres routes → index.html (SPA routing Vue.js)
     @app.get("/{full_path:path}")
@@ -187,3 +192,5 @@ if FRONTEND_DIST.is_dir():
         if full_path and file.is_file():
             return FileResponse(file)
         return FileResponse(FRONTEND_DIST / "index.html")
+else:
+    print(f"[Hitster] WARNING: frontend/dist not found! Contents of parent: {list(FRONTEND_DIST.parent.parent.iterdir())}")
