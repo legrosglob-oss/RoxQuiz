@@ -24,6 +24,7 @@ const isPlaying = ref(false)
 const isReady = ref(false)
 const deviceId = ref('')
 const hasToken = ref(!!sessionStorage.getItem('spotify_access_token'))
+const error = ref('')
 let player = null
 
 function getToken() {
@@ -56,9 +57,12 @@ async function initPlayer() {
     volume: 0.8,
   })
 
+  error.value = ''
+
   player.addListener('ready', ({ device_id }) => {
     deviceId.value = device_id
     isReady.value = true
+    error.value = ''
     console.log('[Spotify] Player ready, device:', device_id)
   })
 
@@ -75,11 +79,18 @@ async function initPlayer() {
 
   player.addListener('initialization_error', ({ message }) => {
     console.error('[Spotify] Init error:', message)
+    error.value = message
   })
 
   player.addListener('authentication_error', ({ message }) => {
     console.error('[Spotify] Auth error:', message)
+    error.value = message
     refreshToken()
+  })
+
+  player.addListener('account_error', ({ message }) => {
+    console.error('[Spotify] Account error:', message)
+    error.value = 'Spotify Premium requis pour la lecture'
   })
 
   const connected = await player.connect()
@@ -142,8 +153,9 @@ function disconnect() {
   isPlaying.value = false
   deviceId.value = ''
   hasToken.value = false
+  error.value = ''
 }
 
 export function useSpotify() {
-  return { isPlaying, isReady, deviceId, hasToken, initPlayer, playTrack, stop, refreshToken, disconnect }
+  return { isPlaying, isReady, deviceId, hasToken, error, initPlayer, playTrack, stop, refreshToken, disconnect }
 }
