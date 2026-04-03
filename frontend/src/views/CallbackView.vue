@@ -25,12 +25,18 @@ onMounted(() => {
 
   // Si ouvert en popup, envoyer le token à la fenêtre parente et fermer
   if (window.opener) {
-    window.opener.postMessage({
+    // Envoyer plusieurs fois pour éviter la race condition
+    const msg = {
       type: 'spotify_token',
       access_token: accessToken,
       refresh_token: refreshToken || '',
-    }, '*')
-    window.close()
+    }
+    window.opener.postMessage(msg, '*')
+    // Réessayer après un court délai puis fermer
+    setTimeout(() => {
+      try { window.opener.postMessage(msg, '*') } catch (e) { /* opener fermé */ }
+      setTimeout(() => window.close(), 300)
+    }, 200)
     return
   }
 

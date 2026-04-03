@@ -131,6 +131,19 @@ function stop() {
   isPlaying.value = false
 }
 
+function disconnect() {
+  if (player) {
+    player.disconnect()
+    player = null
+  }
+  sessionStorage.removeItem('spotify_access_token')
+  sessionStorage.removeItem('spotify_refresh_token')
+  isReady.value = false
+  isPlaying.value = false
+  deviceId.value = ''
+  hasToken.value = false
+}
+
 export function useSpotify() {
-  return { isPlaying, isReady, deviceId, hasToken, initPlayer, playTrack, stop, refreshToken }
+  return { isPlaying, isReady, deviceId, hasToken, initPlayer, playTrack, stop, refreshToken, disconnect }
 }

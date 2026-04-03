@@ -18,6 +18,11 @@
       <div v-if="isHost" class="spotify-status">
         <div v-if="spotifyReady" class="spotify-connected">
           Spotify connecté
+          <button class="spotify-disconnect-btn" @click="disconnectSpotify">Déconnecter</button>
+        </div>
+        <div v-else-if="hasToken" class="spotify-connecting">
+          Connexion Spotify en cours...
+          <button class="spotify-disconnect-btn" @click="disconnectSpotify">Réessayer</button>
         </div>
         <button v-else class="spotify-login-btn" @click="openSpotifyLogin">
           Se connecter à Spotify
@@ -185,7 +190,7 @@ import { useSpotify } from '../composables/useSpotify.js'
 const props = defineProps({ code: String })
 const router = useRouter()
 const { connected, connect, send, on } = useWebSocket()
-const { isPlaying, isReady: spotifyPlayerReady, deviceId, hasToken, initPlayer, playTrack, stop } = useSpotify()
+const { isPlaying, isReady: spotifyPlayerReady, deviceId, hasToken, initPlayer, playTrack, stop, disconnect: spotifyDisconnect } = useSpotify()
 
 const playerName = sessionStorage.getItem('playerName') || 'Joueur'
 
@@ -275,6 +280,11 @@ function updateConfig() {
 
 function goHome() {
   router.push({ name: 'home' })
+}
+
+function disconnectSpotify() {
+  spotifyDisconnect()
+  spotifyTokenSent = false
 }
 
 function openSpotifyLogin() {
@@ -422,6 +432,17 @@ onUnmounted(() => {
   font-weight: 600; font-size: 1rem;
 }
 .spotify-login-btn:hover { opacity: 0.85; }
+.spotify-connecting {
+  color: #e8a838; font-weight: 600; padding: 0.5rem;
+  background: #e8a83822; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+}
+.spotify-disconnect-btn {
+  background: transparent; color: #888; border: 1px solid #444;
+  padding: 0.3rem 0.8rem; border-radius: 12px; font-size: 0.75rem;
+  cursor: pointer;
+}
+.spotify-disconnect-btn:hover { color: #e74c3c; border-color: #e74c3c; }
 
 .config { width: 100%; max-width: 400px; }
 .config label {
