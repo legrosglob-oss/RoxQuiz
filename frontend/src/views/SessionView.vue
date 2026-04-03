@@ -320,8 +320,9 @@ function onSpotifyMessage(event) {
   if (event.data?.type === 'spotify_token') {
     sessionStorage.setItem('spotify_access_token', event.data.access_token)
     sessionStorage.setItem('spotify_refresh_token', event.data.refresh_token || '')
-    hasToken.value = true
-    initPlayer()
+    // Recharger la page pour que le SDK s'initialise proprement
+    // Le token est dans sessionStorage, le code partie dans l'URL, le nom dans sessionStorage
+    window.location.reload()
   }
 }
 
