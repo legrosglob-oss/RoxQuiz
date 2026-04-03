@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     await spotify.close()
 
 
-app = FastAPI(title="Hitster", lifespan=lifespan)
+app = FastAPI(title="RoxQuiz", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -178,7 +178,7 @@ FRONTEND_DIST = _backend_dir / "static"  # copié par le build
 if not FRONTEND_DIST.is_dir():
     FRONTEND_DIST = _backend_dir.parent / "frontend" / "dist"  # dev local
 
-print(f"[Hitster] Frontend dist: {FRONTEND_DIST} (exists={FRONTEND_DIST.is_dir()})")
+print(f"[RoxQuiz] Frontend dist: {FRONTEND_DIST} (exists={FRONTEND_DIST.is_dir()})")
 
 if FRONTEND_DIST.is_dir():
     # Fichiers statiques (JS, CSS, images)
