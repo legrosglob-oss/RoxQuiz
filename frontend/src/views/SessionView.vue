@@ -353,9 +353,9 @@ onMounted(async () => {
     textAnswer.value = ''
     answered.value = false
 
-    // Jouer la musique depuis le frontend si on est l'hôte avec Spotify connecté
-    const canPlay = spotifyPlayerReady.value && data.track.spotify_uri
-    currentHasAudio.value = canPlay
+    // Seul l'hôte joue la musique via le Web Playback SDK
+    const canPlay = isHost.value && spotifyPlayerReady.value && data.track.spotify_uri
+    currentHasAudio.value = data.has_audio
 
     if (canPlay) {
       playTrack(data.track.spotify_uri)
