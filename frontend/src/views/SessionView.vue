@@ -289,7 +289,7 @@ function openSpotifyLogin() {
 let spotifyTokenSent = false
 watch([spotifyPlayerReady, deviceId, connected, players], () => {
   if (!spotifyTokenSent && spotifyPlayerReady.value && deviceId.value && connected.value && isHost.value) {
-    console.log('[Hitster] Sending Spotify token, device:', deviceId.value)
+    console.log('[RoxQuiz] Sending Spotify token, device:', deviceId.value)
     send('set_spotify_token', {
       access_token: sessionStorage.getItem('spotify_access_token'),
       device_id: deviceId.value,

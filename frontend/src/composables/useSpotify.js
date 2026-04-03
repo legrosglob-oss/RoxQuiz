@@ -51,7 +51,7 @@ async function initPlayer() {
   await loadSpotifySDK()
 
   player = new window.Spotify.Player({
-    name: 'Hitster',
+    name: 'RoxQuiz',
     getOAuthToken: (cb) => cb(getToken()),
     volume: 0.8,
   })
