@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import random
 import string
 import time
+import unicodedata
 from dataclasses import dataclass, field
 
 from fastapi import WebSocket
@@ -13,6 +15,7 @@ from models import (
     GameState,
     Player,
     Question,
+    QuestionType,
     RoundResult,
     Track,
 )
@@ -22,6 +25,34 @@ from spotify import THEMES, SpotifyClient
 
 def _generate_code(length: int = 5) -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+
+def _normalize_string(s: str) -> str:
+    """Normalise une chaîne : minuscules, suppression des accents et de la ponctuation."""
+    # Enlever accents
+    s = "".join(
+        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+    )
+    # Tout en minuscules
+    s = s.lower()
+    # Enlever ponctuation
+    s = "".join(c for c in s if c not in string.punctuation)
+    # Enlever espaces en trop
+    return " ".join(s.split())
+
+
+def _is_close_enough(answer: str, correct: str, threshold: float = 0.8) -> bool:
+    """Compare deux chaînes avec une tolérance."""
+    a = _normalize_string(answer)
+    c = _normalize_string(correct)
+    if not a or not c:
+        return a == c
+    if a == c:
+        return True
+    # On autorise aussi si le titre est contenu dans la réponse ou inversement (pour les titres longs)
+    if len(c) > 5 and (c in a or a in c):
+        return True
+    return difflib.SequenceMatcher(None, a, c).ratio() >= threshold
 
 
 @dataclass
@@ -182,14 +213,20 @@ class Game:
     async def end_round(self) -> None:
         question: Question = self._current_question
         track: Track = self._current_track
-        correct_answer = question.correct_answer.lower().strip()
 
         correct_players: list[str] = []
         answers_map: dict[str, str] = {}
 
         for player_name, (answer, _ts) in self._current_answers.items():
             answers_map[player_name] = answer
-            if answer.lower().strip() == correct_answer:
+            
+            is_correct = False
+            if question.type == QuestionType.MCQ:
+                is_correct = answer.lower().strip() == question.correct_answer.lower().strip()
+            else:
+                is_correct = _is_close_enough(answer, question.correct_answer)
+
+            if is_correct:
                 correct_players.append(player_name)
                 self.players[player_name].score += 1
 
