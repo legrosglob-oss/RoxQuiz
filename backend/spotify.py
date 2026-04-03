@@ -211,7 +211,7 @@ class SpotifyClient:
     ) -> list[Track]:
         if not playlist_id:
             return await self._get_default_tracks(limit)
-        data = await self._get(f"/playlists/{playlist_id}/tracks", {"limit": limit})
+        data = await self._get(f"/playlists/{playlist_id}/tracks", {"limit": limit, "market": "FR"})
         tracks: list[Track] = []
         for item in data.get("items", []):
             track = self._parse_track(item.get("track"))

@@ -24,7 +24,9 @@ const isPlaying = ref(false)
 const isReady = ref(false)
 const deviceId = ref('')
 const hasToken = ref(!!sessionStorage.getItem('spotify_access_token'))
+const error = ref('')
 let player = null
+let previewAudio = null
 
 function getToken() {
   return sessionStorage.getItem('spotify_access_token') || ''
@@ -51,15 +53,27 @@ async function initPlayer() {
   await loadSpotifySDK()
 
   player = new window.Spotify.Player({
-    name: 'Hitster',
+    name: 'RoxQuiz',
     getOAuthToken: (cb) => cb(getToken()),
     volume: 0.8,
   })
 
-  player.addListener('ready', ({ device_id }) => {
-    deviceId.value = device_id
-    isReady.value = true
+  error.value = ''
+
+  player.addListener('ready', async ({ device_id }) => {
     console.log('[Spotify] Player ready, device:', device_id)
+    deviceId.value = device_id
+    error.value = ''
+
+    // Attendre que Spotify enregistre le device dans son API
+    const visible = await waitForDeviceVisible(device_id)
+    if (visible) {
+      isReady.value = true
+      console.log('[Spotify] Device confirmed visible in API')
+    } else {
+      console.warn('[Spotify] Device not visible in API after waiting')
+      isReady.value = true // on tente quand même
+    }
   })
 
   player.addListener('not_ready', () => {
@@ -75,19 +89,67 @@ async function initPlayer() {
 
   player.addListener('initialization_error', ({ message }) => {
     console.error('[Spotify] Init error:', message)
+    error.value = message
   })
 
   player.addListener('authentication_error', ({ message }) => {
     console.error('[Spotify] Auth error:', message)
+    error.value = message
     refreshToken()
+  })
+
+  player.addListener('account_error', ({ message }) => {
+    console.error('[Spotify] Account error:', message)
+    error.value = 'Spotify Premium requis pour la lecture'
   })
 
   const connected = await player.connect()
   console.log('[Spotify] connect() =>', connected)
 }
 
+async function waitForDeviceVisible(targetDeviceId, maxAttempts = 10) {
+  const token = getToken()
+  if (!token) return false
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const resp = await fetch('https://api.spotify.com/v1/me/player/devices', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        const found = data.devices?.some(d => d.id === targetDeviceId)
+        console.log(`[Spotify] Device check ${i + 1}/${maxAttempts}:`, data.devices?.map(d => d.id), found ? 'FOUND' : 'not found')
+        if (found) return true
+      }
+    } catch (e) {
+      console.error('[Spotify] Device check error:', e)
+    }
+    await new Promise(r => setTimeout(r, 1000))
+  }
+  return false
+}
+
 async function playTrack(spotifyUri) {
-  if (!deviceId.value || !getToken()) return
+  if (!getToken()) return
+
+  // S'assurer que le player est connecté
+  if (!player || !isReady.value) {
+    await initPlayer()
+    // Attendre que le player soit prêt
+    await new Promise((resolve) => {
+      if (isReady.value) { resolve(); return }
+      const interval = setInterval(() => {
+        if (isReady.value) { clearInterval(interval); resolve() }
+      }, 100)
+      setTimeout(() => { clearInterval(interval); resolve() }, 10000)
+    })
+  }
+
+  if (!deviceId.value) {
+    console.error('[Spotify] No device available')
+    return
+  }
+
   try {
     const resp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId.value}`, {
       method: 'PUT',
@@ -124,13 +186,51 @@ async function refreshToken() {
   }
 }
 
+function playPreview(previewUrl) {
+  stopPreview()
+  if (!previewUrl) return
+  previewAudio = new Audio(previewUrl)
+  previewAudio.volume = 0.8
+  previewAudio.play().then(() => {
+    isPlaying.value = true
+  }).catch((e) => {
+    console.error('[Spotify] Preview play error:', e)
+  })
+  previewAudio.addEventListener('ended', () => {
+    isPlaying.value = false
+  })
+}
+
+function stopPreview() {
+  if (previewAudio) {
+    previewAudio.pause()
+    previewAudio.src = ''
+    previewAudio = null
+  }
+}
+
 function stop() {
   if (player) {
     player.pause()
   }
+  stopPreview()
   isPlaying.value = false
 }
 
+function disconnect() {
+  if (player) {
+    player.disconnect()
+    player = null
+  }
+  sessionStorage.removeItem('spotify_access_token')
+  sessionStorage.removeItem('spotify_refresh_token')
+  isReady.value = false
+  isPlaying.value = false
+  deviceId.value = ''
+  hasToken.value = false
+  error.value = ''
+}
+
 export function useSpotify() {
-  return { isPlaying, isReady, deviceId, hasToken, initPlayer, playTrack, stop, refreshToken }
+  return { isPlaying, isReady, deviceId, hasToken, error, initPlayer, playTrack, playPreview, stop, refreshToken, disconnect }
 }

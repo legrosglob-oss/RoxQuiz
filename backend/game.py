@@ -129,8 +129,12 @@ class Game:
         self._all_answered = asyncio.Event()
         self.current_round += 1
 
-        # La lecture est gérée côté frontend via le Web Playback SDK
-        has_audio = self.spotify_user_token is not None and track.spotify_uri is not None
+        # La lecture est gérée côté frontend :
+        # - Premium : Web Playback SDK (hôte uniquement, piste complète)
+        # - Fallback : preview_url 30s via <audio> (tous les clients)
+        has_premium_audio = self.spotify_user_token is not None and track.spotify_uri is not None
+        has_preview = track.preview_url is not None
+        has_audio = has_premium_audio or has_preview
 
         # Calculer la deadline avant le broadcast pour synchroniser les clients
         wait = (self.config.listen_duration + self.config.answer_duration) if has_audio else self.config.answer_duration
@@ -146,10 +150,20 @@ class Game:
                 "image_url": track.image_url,
             },
             "has_audio": has_audio,
+            "has_premium_audio": has_premium_audio,
             "listen_duration": self.config.listen_duration,
             "answer_duration": self.config.answer_duration,
             "round_deadline": self._round_deadline,
         })
+
+        # Lancer la lecture côté serveur via l'API Spotify
+        if has_premium_audio and self._spotify_client:
+            try:
+                await self._spotify_client.play_track(
+                    self.spotify_user_token, track.spotify_uri, self.spotify_device_id,
+                )
+            except Exception as e:
+                print(f"[Game] Server-side play failed: {e}")
 
         # Attendre le timeout OU que tous les joueurs aient répondu
         try:
@@ -187,6 +201,15 @@ class Game:
             scores={name: p.score for name, p in self.players.items()},
         )
         self.rounds_results.append(result)
+
+        # Stopper la lecture
+        if self.spotify_user_token and self._spotify_client:
+            try:
+                await self._spotify_client.pause_playback(
+                    self.spotify_user_token, self.spotify_device_id,
+                )
+            except Exception:
+                pass
 
         self.state = GameState.ROUND_RESULTS
         await self.broadcast("round_result", {

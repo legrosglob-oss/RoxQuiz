@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: hitster
+    name: roxquiz
     runtime: python
     buildCommand: |
       cd frontend && npm ci && npm run build &&

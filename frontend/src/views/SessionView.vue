@@ -17,11 +17,24 @@
       <!-- Spotify connection pour l'hôte -->
       <div v-if="isHost" class="spotify-status">
         <div v-if="spotifyReady" class="spotify-connected">
-          Spotify connecté
+          Spotify Premium connecté
+          <button class="spotify-disconnect-btn" @click="disconnectSpotify">Déconnecter</button>
         </div>
-        <button v-else class="spotify-login-btn" @click="openSpotifyLogin">
-          Se connecter à Spotify
-        </button>
+        <div v-else-if="hasToken && spotifyError" class="spotify-error">
+          {{ spotifyError }}
+          <button class="spotify-disconnect-btn" @click="disconnectSpotify">Déconnecter</button>
+          <p class="hint">Spotify Premium requis. Connecte un compte Premium.</p>
+        </div>
+        <div v-else-if="hasToken" class="spotify-connecting">
+          Connexion Spotify en cours...
+          <button class="spotify-disconnect-btn" @click="disconnectSpotify">Réessayer</button>
+        </div>
+        <div v-else class="spotify-optional">
+          <button class="spotify-login-btn" @click="openSpotifyLogin">
+            Se connecter à Spotify
+          </button>
+          <p class="hint">Spotify Premium requis pour la musique.</p>
+        </div>
       </div>
 
       <div v-if="isHost" class="config">
@@ -61,7 +74,7 @@
       <button v-if="isHost" class="primary start-btn" @click="startGame" :disabled="players.length < 1 || !spotifyReady">
         Lancer la partie
       </button>
-      <p v-if="isHost && !spotifyReady" class="hint">Connecte-toi à Spotify Premium pour lancer</p>
+      <p v-if="isHost && !spotifyReady && !hasToken" class="hint">Connecte-toi à Spotify Premium pour lancer</p>
       <p v-if="!isHost" class="waiting">En attente du lancement par l'hôte...</p>
 
       <p class="share">Partage ce code : <strong>{{ code }}</strong></p>
@@ -185,7 +198,7 @@ import { useSpotify } from '../composables/useSpotify.js'
 const props = defineProps({ code: String })
 const router = useRouter()
 const { connected, connect, send, on } = useWebSocket()
-const { isPlaying, isReady: spotifyPlayerReady, deviceId, hasToken, initPlayer, playTrack, stop } = useSpotify()
+const { isPlaying, isReady: spotifyPlayerReady, deviceId, hasToken, error: spotifyError, initPlayer, playTrack, playPreview, stop, disconnect: spotifyDisconnect } = useSpotify()
 
 const playerName = sessionStorage.getItem('playerName') || 'Joueur'
 
@@ -277,6 +290,11 @@ function goHome() {
   router.push({ name: 'home' })
 }
 
+function disconnectSpotify() {
+  spotifyDisconnect()
+  spotifyTokenSent = false
+}
+
 function openSpotifyLogin() {
   const url = `/api/spotify/login?game_code=${props.code}`
   const w = 500, h = 700
@@ -289,7 +307,7 @@ function openSpotifyLogin() {
 let spotifyTokenSent = false
 watch([spotifyPlayerReady, deviceId, connected, players], () => {
   if (!spotifyTokenSent && spotifyPlayerReady.value && deviceId.value && connected.value && isHost.value) {
-    console.log('[Hitster] Sending Spotify token, device:', deviceId.value)
+    console.log('[RoxQuiz] Sending Spotify token, device:', deviceId.value)
     send('set_spotify_token', {
       access_token: sessionStorage.getItem('spotify_access_token'),
       device_id: deviceId.value,
@@ -302,8 +320,9 @@ function onSpotifyMessage(event) {
   if (event.data?.type === 'spotify_token') {
     sessionStorage.setItem('spotify_access_token', event.data.access_token)
     sessionStorage.setItem('spotify_refresh_token', event.data.refresh_token || '')
-    hasToken.value = true
-    initPlayer()
+    // Recharger la page pour que le SDK s'initialise proprement
+    // Le token est dans sessionStorage, le code partie dans l'URL, le nom dans sessionStorage
+    window.location.reload()
   }
 }
 
@@ -353,12 +372,13 @@ onMounted(async () => {
     textAnswer.value = ''
     answered.value = false
 
-    // Jouer la musique depuis le frontend si on est l'hôte avec Spotify connecté
-    const canPlay = spotifyPlayerReady.value && data.track.spotify_uri
-    currentHasAudio.value = canPlay
+    // La lecture Premium est gérée côté serveur
+    // Le SDK Web Playback agit comme enceinte (reçoit l'audio automatiquement)
+    // Fallback preview 30s si disponible et pas de Premium
+    currentHasAudio.value = data.has_audio
 
-    if (canPlay) {
-      playTrack(data.track.spotify_uri)
+    if (!data.has_premium_audio && data.track.preview_url) {
+      playPreview(data.track.preview_url)
     }
 
     startTimer(data.round_deadline)
@@ -370,6 +390,7 @@ onMounted(async () => {
     correctPlayers.value = data.correct_players
     scores.value = data.scores
     trackInfo.value = data.track
+    stop()
     clearInterval(timerInterval)
   })
 
@@ -422,6 +443,28 @@ onUnmounted(() => {
   font-weight: 600; font-size: 1rem;
 }
 .spotify-login-btn:hover { opacity: 0.85; }
+.spotify-connecting {
+  color: #e8a838; font-weight: 600; padding: 0.5rem;
+  background: #e8a83822; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+}
+.spotify-disconnect-btn {
+  background: transparent; color: #888; border: 1px solid #444;
+  padding: 0.3rem 0.8rem; border-radius: 12px; font-size: 0.75rem;
+  cursor: pointer;
+}
+.spotify-disconnect-btn:hover { color: #e74c3c; border-color: #e74c3c; }
+.spotify-error {
+  color: #e74c3c; font-weight: 600; padding: 0.5rem;
+  background: #e74c3c22; border-radius: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.5rem;
+  font-size: 0.9rem;
+}
+.spotify-error .hint, .spotify-optional .hint {
+  width: 100%; text-align: center; margin: 0;
+  color: #888; font-size: 0.8rem; font-weight: 400;
+}
+.spotify-optional { text-align: center; }
 
 .config { width: 100%; max-width: 400px; }
 .config label {

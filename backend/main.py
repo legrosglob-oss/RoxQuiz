@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     await spotify.close()
 
 
-app = FastAPI(title="Hitster", lifespan=lifespan)
+app = FastAPI(title="RoxQuiz", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -162,11 +162,20 @@ async def websocket_endpoint(websocket: WebSocket, game_code: str, player_name: 
                     print(f"[Game] Spotify device set: {device_id}")
 
     except WebSocketDisconnect:
-        game.remove_player(player_name)
-        await game.broadcast("player_left", {
-            "player": player_name,
-            "players": game.players_info(),
-        })
+        # Ne pas supprimer immédiatement : laisser un délai pour la reconnexion
+        game.connections.pop(player_name, None)
+
+        async def delayed_remove():
+            await asyncio.sleep(5)
+            # Si le joueur ne s'est pas reconnecté, le supprimer
+            if player_name not in game.connections:
+                game.remove_player(player_name)
+                await game.broadcast("player_left", {
+                    "player": player_name,
+                    "players": game.players_info(),
+                })
+
+        asyncio.create_task(delayed_remove())
         if not game.players:
             manager.remove_game(game_code)
 
@@ -178,7 +187,7 @@ FRONTEND_DIST = _backend_dir / "static"  # copié par le build
 if not FRONTEND_DIST.is_dir():
     FRONTEND_DIST = _backend_dir.parent / "frontend" / "dist"  # dev local
 
-print(f"[Hitster] Frontend dist: {FRONTEND_DIST} (exists={FRONTEND_DIST.is_dir()})")
+print(f"[RoxQuiz] Frontend dist: {FRONTEND_DIST} (exists={FRONTEND_DIST.is_dir()})")
 
 if FRONTEND_DIST.is_dir():
     # Fichiers statiques (JS, CSS, images)

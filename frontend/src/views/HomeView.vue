@@ -1,6 +1,6 @@
 <template>
   <div class="home">
-    <h1 class="title">Hitster</h1>
+    <h1 class="title">RoxQuiz</h1>
     <p class="subtitle">Le jeu musical en ligne</p>
 
     <div class="form-section">
